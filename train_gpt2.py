@@ -1,6 +1,8 @@
 import jax
 import jax.numpy as jnp
 import tiktoken
+import optax
+from typing import Dict, Any
 
 def check_nan(tensor, name):
     if jnp.isnan(tensor).any():
@@ -29,6 +31,23 @@ class Transformer:
         logits_blv = jnp.einsum('ble,ve->blv', o_ble, self.toke_ve)
         check_nan(logits_blv, "Final logits")
         return logits_blv
+
+    def get_params(self) -> Dict[str, Any]:
+        params = {
+            'toke_ve': self.toke_ve,
+            'pose_ve': self.pose_ve,
+            'lf': self.lf.get_params()
+        }
+        for i, block in enumerate(self.blocks):
+            params[f'block_{i}'] = block.get_params()
+        return params
+
+    def update_params(self, new_params: Dict[str, Any]):
+        self.toke_ve = new_params['toke_ve']
+        self.pose_ve = new_params['pose_ve']
+        self.lf.update_params(new_params['lf'])
+        for i, block in enumerate(self.blocks):
+            block.update_params(new_params[f'block_{i}'])
 
 class MHA:
     def __init__(self, h, e):
@@ -61,6 +80,22 @@ class MHA:
         check_nan(out_ble, "MHA output")
         return out_ble
 
+    def get_params(self) -> Dict[str, Any]:
+        return {
+            'wq_ehk': self.wq_ehk,
+            'wk_ehk': self.wk_ehk,
+            'wv_ehk': self.wv_ehk,
+            'wo_hke': self.wo_hke,
+            'b_e': self.b_e
+        }
+
+    def update_params(self, new_params: Dict[str, Any]):
+        self.wq_ehk = new_params['wq_ehk']
+        self.wk_ehk = new_params['wk_ehk']
+        self.wv_ehk = new_params['wv_ehk']
+        self.wo_hke = new_params['wo_hke']
+        self.b_e = new_params['b_e']
+
 class Block:
     def __init__(self, h, e, layers):
         self.ffn = FFN(e, layers)
@@ -83,6 +118,20 @@ class Block:
         check_nan(x_ble, "Post-FFN residual")
         return x_ble
 
+    def get_params(self) -> Dict[str, Any]:
+        return {
+            'ffn': self.ffn.get_params(),
+            'ln1': self.ln1.get_params(),
+            'attn': self.attn.get_params(),
+            'ln2': self.ln2.get_params()
+        }
+
+    def update_params(self, new_params: Dict[str, Any]):
+        self.ffn.update_params(new_params['ffn'])
+        self.ln1.update_params(new_params['ln1'])
+        self.attn.update_params(new_params['attn'])
+        self.ln2.update_params(new_params['ln2'])
+
 class LayerNorm:
     def __init__(self, e, eps=1e-5):
         self.eps = eps
@@ -96,6 +145,16 @@ class LayerNorm:
         y_ble = self.gamma_e * norm_ble + self.beta_e
         check_nan(y_ble, "LayerNorm output")
         return y_ble
+
+    def get_params(self) -> Dict[str, Any]:
+        return {
+            'gamma_e': self.gamma_e,
+            'beta_e': self.beta_e
+        }
+
+    def update_params(self, new_params: Dict[str, Any]):
+        self.gamma_e = new_params['gamma_e']
+        self.beta_e = new_params['beta_e']
 
 class FFN:
     def __init__(self, e, layers):
@@ -116,6 +175,20 @@ class FFN:
         check_nan(y_ble, "FFN output")
         return y_ble
 
+    def get_params(self) -> Dict[str, Any]:
+        return {
+            'fc': self.fc,
+            'proj': self.proj,
+            'b1': self.b1,
+            'b2': self.b2
+        }
+
+    def update_params(self, new_params: Dict[str, Any]):
+        self.fc = new_params['fc']
+        self.proj = new_params['proj']
+        self.b1 = new_params['b1']
+        self.b2 = new_params['b2']
+
 class Embedding:
     def __init__(self, v, e):
         self.w = jax.random.normal(jax.random.PRNGKey(4), (v, e)) * 0.02
@@ -124,6 +197,12 @@ class Embedding:
         y_ble = self.w[x_bl]
         check_nan(y_ble, "Embedding output")
         return y_ble
+
+    def get_params(self) -> Dict[str, Any]:
+        return {'w': self.w}
+
+    def update_params(self, new_params: Dict[str, Any]):
+        self.w = new_params['w']
 
 def print_shape(model):
     print("Transformer shapes:")
@@ -165,7 +244,36 @@ def sample(model, length):
         x = jnp.concatenate([x, jax.nn.one_hot(jnp.array([[tok]]), vocab_size)], axis=1)
     return enc.decode(jnp.argmax(x[0], axis=-1).tolist())
 
-# TODO optimizer, training loop
+def train_step(model, batch, optimizer, enc):
+    x = jax.nn.one_hot(batch[:, :-1], vocab_size)
+    y = batch[:, 1:]
+    
+    def loss_fn(params):
+        model.update_params(params)
+        logits = model(x)
+        loss = optax.softmax_cross_entropy_with_integer_labels(logits, y)
+        return jnp.mean(loss)
+    
+    loss, grads = jax.value_and_grad(loss_fn)(model.get_params())
+    updates, optimizer_state = optimizer.update(grads, optimizer_state, model.get_params())
+    model.update_params(optax.apply_updates(model.get_params(), updates))
+    return loss, model, optimizer_state
+
+def get_batches(B, L):
+    with open('input.txt', 'r') as f:
+        text = f.read()
+    
+    enc = tiktoken.get_encoding("gpt2")
+    data = jnp.array(enc.encode(text))
+    
+    n = len(data)
+    batch_size = B * L
+    n_batches = n // batch_size
+    
+    for i in range(n_batches):
+        batch = data[i*batch_size : (i+1)*batch_size]
+        batch = batch.reshape(B, L)
+        yield batch
 
 # Hparams
 epochs = 50
@@ -179,6 +287,20 @@ L = 1024
 # Init Transformer and print all shapes to ensure they align with expectations
 model = Transformer(vocab_size, heads, hidden_size, layers, L)
 
-#print_shape(model)
-print("\nSample output:")
-print(sample(model, 50))
+# Initialize optimizer
+learning_rate = 3e-4
+optimizer = optax.adamw(learning_rate)
+optimizer_state = optimizer.init(model.get_params())
+
+# Training loop
+enc = tiktoken.get_encoding("gpt2")
+for epoch in range(epochs):
+    for batch in get_batches(B, L):  # Assume get_batches is defined elsewhere
+        loss, model, optimizer_state = train_step(model, batch, optimizer, enc)
+        print(f"Epoch {epoch+1}/{epochs}, Loss: {loss}")
+        break
+
+    print(f"Epoch {epoch+1}/{epochs}, Loss: {loss}")
+
+print("\nTraining completed. Final sample output:")
+print(sample(model, 100))
