@@ -130,7 +130,7 @@ def train_step(params, batch, optimizer_state):
         return jnp.mean(loss)
     
     loss, grads = jax.value_and_grad(loss_fn)(params)
-    updates, optimizer_state = optimizer.update(grads, optimizer_state)
+    updates, optimizer_state = optimizer.update(grads, optimizer_state, params)
     params = optax.apply_updates(params, updates)
     return loss, params, optimizer_state
 
@@ -193,12 +193,12 @@ optimizer = optax.adamw(learning_rate)
 optimizer_state = optimizer.init(params)
 
 # Training loop
-#for epoch in range(epochs):
-#    for batch in get_batches(B, L):
-#        loss, params, optimizer_state = train_step(params, batch, optimizer_state)
-#        print(f"Epoch {epoch+1}/{epochs}, Loss: {loss}")
+for epoch in range(epochs):
+    for batch in get_batches(B, L):
+        loss, params, optimizer_state = train_step(params, batch, optimizer_state)
+        print(f"Epoch {epoch+1}/{epochs}, Loss: {loss}")
 
-#    print(f"Epoch {epoch+1}/{epochs}, Loss: {loss}")
+    print(f"Epoch {epoch+1}/{epochs}, Loss: {loss}")
 
 print("\nTraining completed. Final sample output:")
 print(sample(params, 100))
