@@ -3,6 +3,7 @@ import jax.numpy as jnp
 import tiktoken
 import optax
 from typing import Dict, Any
+import time
 
 def check_nan(tensor, name):
     if jnp.isnan(tensor).any():
@@ -194,11 +195,13 @@ optimizer_state = optimizer.init(params)
 
 # Training loop
 for epoch in range(epochs):
+    start_time = time.time()
     for batch in get_batches(B, L):
         loss, params, optimizer_state = train_step(params, batch, optimizer_state)
-        print(f"Epoch {epoch+1}/{epochs}, Loss: {loss}")
-
-    print(f"Epoch {epoch+1}/{epochs}, Loss: {loss}")
+    
+    end_time = time.time()
+    epoch_duration = end_time - start_time
+    print(f"Epoch {epoch+1}/{epochs}, Loss: {loss}, Duration: {epoch_duration:.2f} seconds")
 
 print("\nTraining completed. Final sample output:")
 print(sample(params, 100))
