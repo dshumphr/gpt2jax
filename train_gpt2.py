@@ -244,7 +244,7 @@ def sample(model, length):
         x = jnp.concatenate([x, jax.nn.one_hot(jnp.array([[tok]]), vocab_size)], axis=1)
     return enc.decode(jnp.argmax(x[0], axis=-1).tolist())
 
-def train_step(model, batch, optimizer, enc):
+def train_step(model, batch, optimizer, optimizer_state, enc):
     x = jax.nn.one_hot(batch[:, :-1], vocab_size)
     y = batch[:, 1:]
     
@@ -281,8 +281,8 @@ heads = 12
 layers = 12
 hidden_size = 768
 vocab_size = 50257
-B = 32
-L = 1024
+B = 4
+L = 512
 
 # Init Transformer and print all shapes to ensure they align with expectations
 model = Transformer(vocab_size, heads, hidden_size, layers, L)
@@ -296,7 +296,7 @@ optimizer_state = optimizer.init(model.get_params())
 enc = tiktoken.get_encoding("gpt2")
 for epoch in range(epochs):
     for batch in get_batches(B, L):  # Assume get_batches is defined elsewhere
-        loss, model, optimizer_state = train_step(model, batch, optimizer, enc)
+        loss, model, optimizer_state = train_step(model, batch, optimizer, optimizer_state, enc)
         print(f"Epoch {epoch+1}/{epochs}, Loss: {loss}")
         break
 
