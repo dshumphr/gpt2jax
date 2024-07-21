@@ -143,7 +143,7 @@ def custom_choice(key, a, p):
 
 def sample(model, length):
     enc = tiktoken.get_encoding("gpt2")
-    x = jnp.array([enc.encode("Hello, I'm a language model,")])
+    x = jnp.array([enc.encode("All:")])
     x = jax.nn.one_hot(x, vocab_size)
     for i in range(length):
         logits = Transformer.apply(params, x)
@@ -176,7 +176,7 @@ def get_batches(B, L):
         yield batch
 
 # Hparams
-epochs = 50
+epochs = 5
 heads = 12
 layers = 12
 hidden_size = 768
