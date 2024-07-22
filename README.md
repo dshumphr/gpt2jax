@@ -1,6 +1,6 @@
 # nanoGPT-JAX
 
-This repository contains a from-scratch implementation of nanoGPT using JAX (implemented in order to learn JAX). It is based on Andrej Karpathy's GPT-2 from scratch video series.
+This repository contains a from-scratch implementation of nanoGPT using JAX (implemented in order to learn, so using vanilla JAX as much as possible). It is based on Andrej Karpathy's GPT-2 from scratch video series.
 
 Note: This is a work in progress and doesn't yet implement everything from the video series.
 
@@ -26,5 +26,14 @@ TODO
 ## Training
 
 TODO
+
+## Gaps between this and Karpathy implementation
+- Mixed precision (although jax already does matmuls with tf32 by default on gpu)
+- Flash attention (TODO, nan-ing atm)
+- LR schedule (TODO)
+- Weight Decay, Fused Adam (TODO)
+- Batch size scheduling
+- Reduced context window and batch size due to my own hardware limits
+- Gradient Accumulation (TODO)
 
 Note AI.md is added to enable a sonnet extension (https://github.com/dshumphr/tad)
