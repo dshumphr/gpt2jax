@@ -6,10 +6,11 @@ from typing import Dict, Any
 import time
 from flash_attention_jax import causal_flash_attention
 
-
+#jax.config.update("jax_debug_nans", True)
 def check_nan(tensor, name):
     if jnp.isnan(tensor).any():
         print(f"NaN detected in {name}")
+        print(tensor)
 
 class Transformer:
     @staticmethod
@@ -44,13 +45,13 @@ class Transformer:
 
 class MHA:
     @staticmethod
-    def init(key, h, e):
+    def init(key, h, e, layers):
         key, *subkeys = jax.random.split(key, 5)
         return {
             'wq_ehk': jax.random.normal(subkeys[0], (e, h, e//h)) * 0.02,
             'wk_ehk': jax.random.normal(subkeys[1], (e, h, e//h)) * 0.02,
             'wv_ehk': jax.random.normal(subkeys[2], (e, h, e//h)) * 0.02,
-            'wo_hke': jax.random.normal(subkeys[3], (h, e//h, e)) * 0.02,
+            'wo_hke': jax.random.normal(subkeys[3], (h, e//h, e)) * 0.02 / jnp.sqrt(2 * layers),
             'b_e': jnp.zeros(e)
         }
 
@@ -67,11 +68,15 @@ class MHA:
         attn = jnp.where(mask[None, None, :, :], -jnp.inf, attn)
         attn = jax.nn.softmax(attn, axis=-1)
         values = jnp.einsum('blhk,bhlm->blhk', v_blhk, attn)
-        
-        #flash attn
-        #values = causal_flash_attention(q_blhk, k_blhk, v_blhk)
-
         out_ble = jnp.einsum('blhk,hke->ble', values, params['wo_hke']) + params['b_e']
+
+
+        #flash attn
+        #q_bhlk = jnp.einsum('ble,ehk->bhlk', x_ble, params['wq_ehk'])
+        #k_bhlk = jnp.einsum('ble,ehk->bhlk', x_ble, params['wk_ehk'])
+        #v_bhlk = jnp.einsum('ble,ehk->bhlk', x_ble, params['wv_ehk'])
+        #values = causal_flash_attention(q_bhlk, k_bhlk, v_bhlk)
+        #out_ble = jnp.einsum('bhlk,hke->ble', values, params['wo_hke']) + params['b_e']
         return out_ble
 
 class Block:
@@ -81,7 +86,7 @@ class Block:
         return {
             'ffn': FFN.init(subkeys[0], e, layers),
             'ln1': LayerNorm.init(subkeys[1], e),
-            'attn': MHA.init(subkeys[2], h, e),
+            'attn': MHA.init(subkeys[2], h, e, layers),
             'ln2': LayerNorm.init(subkeys[3], e)
         }
 
@@ -108,7 +113,7 @@ class LayerNorm:
     def apply(params, x_ble):
         mean_bl = jnp.mean(x_ble, axis=-1, keepdims=True)
         var_bl = jnp.var(x_ble, axis=-1, keepdims=True)
-        norm_ble = (x_ble - mean_bl) / jnp.sqrt(var_bl + params['eps'])
+        norm_ble = (x_ble - mean_bl) * jax.lax.rsqrt(var_bl + params['eps'])
         y_ble = params['gamma_e'] * norm_ble + params['beta_e']
         return y_ble
 
@@ -117,7 +122,7 @@ class FFN:
     def init(key, e, layers):
         key, *subkeys = jax.random.split(key, 3)
         return {
-            'fc': jax.random.normal(subkeys[0], (e, 4*e)) * 0.02 / jnp.sqrt(2 * layers),
+            'fc': jax.random.normal(subkeys[0], (e, 4*e)) * 0.02,
             'proj': jax.random.normal(subkeys[1], (4*e, e)) * 0.02 / jnp.sqrt(2 * layers),
             'b1': jnp.zeros(4*e),
             'b2': jnp.zeros(e)

@@ -8,6 +8,8 @@ from flash_attention_jax import causal_flash_attention
 from flax import linen as nn
 from flax.training import train_state
 
+# TODO fix up initializers to match regular version
+
 def check_nan(tensor, name):
     if jnp.isnan(tensor).any():
         print(f"NaN detected in {name}")
@@ -27,13 +29,13 @@ class MHA(nn.Module):
         wo = self.param('wo', nn.initializers.normal(0.02), (h, k, e))
         b = self.param('b', nn.initializers.zeros, (e,))
         
-        q = jnp.einsum('ble,ehk->blhk', x, wq)
-        k = jnp.einsum('ble,ehk->blhk', x, wk)
-        v = jnp.einsum('ble,ehk->blhk', x, wv)
+        q = jnp.einsum('ble,ehk->bhlk', x, wq)
+        k = jnp.einsum('ble,ehk->bhlk', x, wk)
+        v = jnp.einsum('ble,ehk->bhlk', x, wv)
         
         values = causal_flash_attention(q, k, v)
         
-        out = jnp.einsum('blhk,hke->ble', values, wo) + b
+        out = jnp.einsum('bhlk,hke->ble', values, wo) + b
         return out
 
 class FFN(nn.Module):
