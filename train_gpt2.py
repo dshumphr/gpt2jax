@@ -4,6 +4,7 @@ import tiktoken
 import optax
 from typing import Dict, Any
 import time
+import math
 from flash_attention_jax import causal_flash_attention
 
 #jax.config.update("jax_debug_nans", True)
@@ -189,32 +190,50 @@ def get_batches(B, L):
         yield batch
 
 # Hparams
-epochs = 5
 heads = 12
 layers = 12
 hidden_size = 768
 vocab_size = 50304
 B = 4
 L = 1024
+epochs = 50 # Note will be cut off my max_steps
+max_steps = 500
 
 # Initialize model parameters
 key = jax.random.PRNGKey(0)
 params = Transformer.init(key, vocab_size, heads, hidden_size, layers, L)
 
+# Learning rate scheduler using optax
+warmup_steps = 10
+max_lr = 6e-4
+min_lr = max_lr * 0.1
+schedule_fn = optax.warmup_cosine_decay_schedule(
+    init_value=0.0,
+    peak_value=max_lr,
+    warmup_steps=warmup_steps,
+    decay_steps=max_steps,
+    end_value=min_lr
+)
+
 # Initialize optimizer
-learning_rate = 3e-4
 optimizer = optax.chain(
    optax.clip_by_global_norm(1.0),
-   optax.adamw(learning_rate, 0.9, 0.95),
+   optax.adamw(schedule_fn, b1=0.9, b2=0.95),
 )
 optimizer_state = optimizer.init(params)
 
 # Training loop
+step = 0
 for epoch in range(epochs):
+    if step >= max_steps:
+        break
     start_time = time.time()
     for batch in get_batches(B, L):
         loss, params, optimizer_state = train_step(params, batch, optimizer_state)
-    
+        step += 1
+        if step >= max_steps:
+            break
+
     end_time = time.time()
     epoch_duration = end_time - start_time
     print(f"Epoch {epoch+1}/{epochs}, Loss: {loss}, Duration: {epoch_duration:.2f} seconds")
