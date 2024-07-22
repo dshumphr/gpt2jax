@@ -4,6 +4,8 @@ import tiktoken
 import optax
 from typing import Dict, Any
 import time
+from flash_attention_jax import causal_flash_attention
+
 
 def check_nan(tensor, name):
     if jnp.isnan(tensor).any():
@@ -57,6 +59,7 @@ class MHA:
         q_blhk = jnp.einsum('ble,ehk->blhk', x_ble, params['wq_ehk'])
         k_blhk = jnp.einsum('ble,ehk->blhk', x_ble, params['wk_ehk'])
         v_blhk = jnp.einsum('ble,ehk->blhk', x_ble, params['wv_ehk'])
+
         attn = jnp.einsum('blhk,bmhk->bhlm', q_blhk, k_blhk)
         b, l, h, k = q_blhk.shape
         attn = attn / jnp.sqrt(k)
@@ -64,6 +67,10 @@ class MHA:
         attn = jnp.where(mask[None, None, :, :], -jnp.inf, attn)
         attn = jax.nn.softmax(attn, axis=-1)
         values = jnp.einsum('blhk,bhlm->blhk', v_blhk, attn)
+        
+        #flash attn
+        #values = causal_flash_attention(q_blhk, k_blhk, v_blhk)
+
         out_ble = jnp.einsum('blhk,hke->ble', values, params['wo_hke']) + params['b_e']
         return out_ble
 
@@ -180,7 +187,7 @@ epochs = 5
 heads = 12
 layers = 12
 hidden_size = 768
-vocab_size = 50257
+vocab_size = 50304
 B = 4
 L = 1024
 
@@ -190,7 +197,10 @@ params = Transformer.init(key, vocab_size, heads, hidden_size, layers, L)
 
 # Initialize optimizer
 learning_rate = 3e-4
-optimizer = optax.adamw(learning_rate)
+optimizer = optax.chain(
+   optax.clip_by_global_norm(1.0),
+   optax.adamw(learning_rate, 0.9, 0.95),
+)
 optimizer_state = optimizer.init(params)
 
 # Training loop
@@ -204,4 +214,4 @@ for epoch in range(epochs):
     print(f"Epoch {epoch+1}/{epochs}, Loss: {loss}, Duration: {epoch_duration:.2f} seconds")
 
 print("\nTraining completed. Final sample output:")
-print(sample(params, 100))
+print(sample(params, 10))

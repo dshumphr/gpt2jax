@@ -1,1 +1,2 @@
 Vanilla: ~26s/epoch
+Vocab Inc: ~25s/epoch
