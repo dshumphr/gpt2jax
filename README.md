@@ -1,6 +1,8 @@
 # nanoGPT-JAX
 
-This repository contains a from-scratch implementation of nanoGPT using JAX. It is based on Andrej Karpathy's GPT-2 from scratch video series.
+This repository contains a from-scratch implementation of nanoGPT using JAX (implemented in order to learn JAX). It is based on Andrej Karpathy's GPT-2 from scratch video series.
+
+Note: This is a work in progress and doesn't yet implement everything from the video series.
 
 ## Overview
 
@@ -24,3 +26,5 @@ TODO
 ## Training
 
 TODO
+
+Note AI.md is added to enable a sonnet extension (https://github.com/dshumphr/tad)
