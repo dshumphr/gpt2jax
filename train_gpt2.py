@@ -216,9 +216,11 @@ schedule_fn = optax.warmup_cosine_decay_schedule(
 )
 
 # Initialize optimizer
+weight_decay = 0.1
+mask = jax.tree_map(lambda x: x.ndim >= 2, params)
 optimizer = optax.chain(
    optax.clip_by_global_norm(1.0),
-   optax.adamw(schedule_fn, b1=0.9, b2=0.95),
+   optax.adamw(learning_rate=schedule_fn, b1=0.9, b2=0.95, weight_decay=weight_decay, mask=mask)
 )
 optimizer_state = optimizer.init(params)
 
