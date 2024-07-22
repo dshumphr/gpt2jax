@@ -1,4 +1,5 @@
 Vanilla: ~26s/epoch
 Vocab Inc: ~25s/epoch
+Flash: ~29s/epoch
 
-Flax+Flash: ~17s/epoch
+Flax+Flash: ~27s/epoch

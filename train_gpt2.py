@@ -57,7 +57,6 @@ class MHA:
 
     @staticmethod
     def apply(params, x_ble):
-        """
         q_blhk = jnp.einsum('ble,ehk->blhk', x_ble, params['wq_ehk'])
         k_blhk = jnp.einsum('ble,ehk->blhk', x_ble, params['wk_ehk'])
         v_blhk = jnp.einsum('ble,ehk->blhk', x_ble, params['wv_ehk'])
@@ -69,14 +68,15 @@ class MHA:
         attn = jax.nn.softmax(attn, axis=-1)
         values = jnp.einsum('blhk,bhlm->blhk', v_blhk, attn)
         out_ble = jnp.einsum('blhk,hke->ble', values, params['wo_hke']) + params['b_e']
-        """
 
+        """
         #flash attn
         q_bhlk = jnp.einsum('ble,ehk->bhlk', x_ble, params['wq_ehk'])
         k_bhlk = jnp.einsum('ble,ehk->bhlk', x_ble, params['wk_ehk'])
         v_bhlk = jnp.einsum('ble,ehk->bhlk', x_ble, params['wv_ehk'])
         values = causal_flash_attention(q_bhlk, k_bhlk, v_bhlk)
         out_ble = jnp.einsum('bhlk,hke->ble', values, params['wo_hke']) + params['b_e']
+        """
         return out_ble
 
 class Block:
