@@ -138,16 +138,20 @@ class FFN:
         return y_ble
 
 @jax.jit
-def train_step(params, batch, optimizer_state):
+def compute_loss_and_grads(params, batch):
     def loss_fn(params):
         logits = Transformer.apply(params, jax.nn.one_hot(batch[:, :-1], vocab_size))
         loss = optax.softmax_cross_entropy_with_integer_labels(logits, batch[:, 1:])
         return jnp.mean(loss)
     
     loss, grads = jax.value_and_grad(loss_fn)(params)
+    return loss, grads
+
+@jax.jit
+def update_params(params, grads, optimizer_state):
     updates, optimizer_state = optimizer.update(grads, optimizer_state, params)
     params = optax.apply_updates(params, updates)
-    return loss, params, optimizer_state
+    return params, optimizer_state
 
 def custom_choice(key, a, p):
     """Custom implementation of random choice"""
@@ -224,21 +228,48 @@ optimizer = optax.chain(
 )
 optimizer_state = optimizer.init(params)
 
-# Training loop
+# Training loop with gradient accumulation
 step = 0
+total_tokens = 524288
+tokens_per_batch = B * L
+accumulation_steps = total_tokens // tokens_per_batch
+
 for epoch in range(epochs):
     if step >= max_steps:
         break
     start_time = time.time()
-    for batch in get_batches(B, L):
-        loss, params, optimizer_state = train_step(params, batch, optimizer_state)
-        step += 1
+    accumulated_grads = None
+    accumulated_loss = 0.0
+
+    for i, batch in enumerate(get_batches(B, L)):
+        loss, grads = compute_loss_and_grads(params, batch)
+        accumulated_loss += loss
+
+        if accumulated_grads is None:
+            accumulated_grads = grads
+        else:
+            accumulated_grads = jax.tree_map(lambda x, y: x + y, accumulated_grads, grads)
+
+        if (i + 1) % accumulation_steps == 0:
+            # Average the gradients
+            accumulated_grads = jax.tree_map(lambda x: x / accumulation_steps, accumulated_grads)
+            
+            # Update parameters
+            params, optimizer_state = update_params(params, accumulated_grads, optimizer_state)
+            
+            # Reset accumulation
+            accumulated_grads = None
+            step += 1
+
+            print(f"Step {step}, Loss: {accumulated_loss / accumulation_steps}")
+            accumulated_loss = 0.0
+
         if step >= max_steps:
             break
 
     end_time = time.time()
     epoch_duration = end_time - start_time
-    print(f"Epoch {epoch+1}/{epochs}, Loss: {loss}, Duration: {epoch_duration:.2f} seconds")
+    print(f"Epoch {epoch+1}/{epochs}, Duration: {epoch_duration:.2f} seconds")
 
 print("\nTraining completed. Final sample output:")
 print(sample(params, 10))
