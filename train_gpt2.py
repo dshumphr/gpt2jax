@@ -201,7 +201,7 @@ hidden_size = 768
 vocab_size = 50304
 B = 4
 L = 1024
-max_steps = 512
+max_steps = 4096
 
 # Initialize model parameters
 key = jax.random.PRNGKey(0)
@@ -209,57 +209,45 @@ params = Transformer.init(key, vocab_size, heads, hidden_size, layers, L)
 
 # Learning rate scheduler using optax
 warmup_steps = 10
-max_lr = 6e-4
+max_lr = 18e-4
 min_lr = max_lr * 0.1
 schedule_fn = optax.warmup_cosine_decay_schedule(
-    init_value=0.0,
+    init_value=min_lr,
     peak_value=max_lr,
     warmup_steps=warmup_steps,
     decay_steps=max_steps,
     end_value=min_lr
 )
 
-# Initialize optimizer
-weight_decay = 0.1
-mask = jax.tree_map(lambda x: x.ndim >= 2, params)
-optimizer = optax.chain(
-   optax.clip_by_global_norm(1.0),
-   optax.adamw(learning_rate=schedule_fn, b1=0.9, b2=0.95, weight_decay=weight_decay, mask=mask)
-)
-optimizer_state = optimizer.init(params)
-
 # Training loop with gradient accumulation
 step = 0
 total_tokens = 524288
 tokens_per_batch = B * L
 accumulation_steps = total_tokens // tokens_per_batch
-
-start_time = time.time()
 accumulated_grads = None
 accumulated_loss = 0.0
 
-batch_generator = get_batches(B, L)
+# Initialize optimizer
+weight_decay = 0.1
+mask = jax.tree_map(lambda x: x.ndim >= 2, params)
+optimizer = optax.MultiSteps(
+    optax.chain(
+        optax.clip_by_global_norm(1.0),
+        optax.adamw(learning_rate=schedule_fn, b1=0.9, b2=0.95, weight_decay=weight_decay, mask=mask)
+    ),
+    every_k_schedule=accumulation_steps,
+)
+optimizer_state = optimizer.init(params)
 
+start_time = time.time()
+batch_generator = get_batches(B, L)
 for step in range(max_steps):
     batch = next(batch_generator)
     loss, grads = compute_loss_and_grads(params, batch)
     accumulated_loss += loss
-
-    if accumulated_grads is None:
-        accumulated_grads = grads
-    else:
-        accumulated_grads = jax.tree_map(lambda x, y: x + y, accumulated_grads, grads)
+    params, optimizer_state = update_params(params, grads, optimizer_state)
 
     if (step + 1) % accumulation_steps == 0:
-        # Average the gradients
-        accumulated_grads = jax.tree_map(lambda x: x / accumulation_steps, accumulated_grads)
-        
-        # Update parameters
-        params, optimizer_state = update_params(params, accumulated_grads, optimizer_state)
-        
-        # Reset accumulation
-        accumulated_grads = None
-
         # Calculate tokens/s
         tokens_processed = ((step + 1) * tokens_per_batch)
         elapsed_time = time.time() - start_time
