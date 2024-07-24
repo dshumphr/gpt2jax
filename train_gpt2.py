@@ -201,7 +201,7 @@ hidden_size = 768
 vocab_size = 50304
 B = 4
 L = 1024
-max_steps = 500
+max_steps = 512
 
 # Initialize model parameters
 key = jax.random.PRNGKey(0)
@@ -261,7 +261,7 @@ for step in range(max_steps):
         accumulated_grads = None
 
         # Calculate tokens/s
-        tokens_processed = ((step + 1) * total_tokens)
+        tokens_processed = ((step + 1) * tokens_per_batch)
         elapsed_time = time.time() - start_time
         tokens_per_second = tokens_processed / elapsed_time
 
