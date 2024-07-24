@@ -188,10 +188,11 @@ def get_batches(B, L):
     batch_size = B * L
     n_batches = n // batch_size
     
-    for i in range(n_batches):
-        batch = data[i*batch_size : (i+1)*batch_size]
-        batch = batch.reshape(B, L)
-        yield batch
+    while True:
+        for i in range(n_batches):
+            batch = data[i*batch_size : (i+1)*batch_size]
+            batch = batch.reshape(B, L)
+            yield batch
 
 # Hparams
 heads = 12
@@ -200,7 +201,6 @@ hidden_size = 768
 vocab_size = 50304
 B = 4
 L = 1024
-epochs = 50 # Note will be cut off my max_steps
 max_steps = 500
 
 # Initialize model parameters
@@ -234,47 +234,39 @@ total_tokens = 524288
 tokens_per_batch = B * L
 accumulation_steps = total_tokens // tokens_per_batch
 
-for epoch in range(epochs):
-    if step >= max_steps:
-        break
-    start_time = time.time()
-    accumulated_grads = None
-    accumulated_loss = 0.0
+start_time = time.time()
+accumulated_grads = None
+accumulated_loss = 0.0
 
-    for i, batch in enumerate(get_batches(B, L)):
-        loss, grads = compute_loss_and_grads(params, batch)
-        accumulated_loss += loss
+batch_generator = get_batches(B, L)
 
-        if accumulated_grads is None:
-            accumulated_grads = grads
-        else:
-            accumulated_grads = jax.tree_map(lambda x, y: x + y, accumulated_grads, grads)
+for step in range(max_steps):
+    batch = next(batch_generator)
+    loss, grads = compute_loss_and_grads(params, batch)
+    accumulated_loss += loss
 
-        if (i + 1) % accumulation_steps == 0:
-            # Average the gradients
-            accumulated_grads = jax.tree_map(lambda x: x / accumulation_steps, accumulated_grads)
-            
-            # Update parameters
-            params, optimizer_state = update_params(params, accumulated_grads, optimizer_state)
-            
-            # Reset accumulation
-            accumulated_grads = None
-            step += 1
+    if accumulated_grads is None:
+        accumulated_grads = grads
+    else:
+        accumulated_grads = jax.tree_map(lambda x, y: x + y, accumulated_grads, grads)
 
-            # Calculate tokens/s
-            tokens_processed = (step * total_tokens)
-            elapsed_time = time.time() - start_time
-            tokens_per_second = tokens_processed / elapsed_time
+    if (step + 1) % accumulation_steps == 0:
+        # Average the gradients
+        accumulated_grads = jax.tree_map(lambda x: x / accumulation_steps, accumulated_grads)
+        
+        # Update parameters
+        params, optimizer_state = update_params(params, accumulated_grads, optimizer_state)
+        
+        # Reset accumulation
+        accumulated_grads = None
 
-            print(f"Step {step}, Loss: {accumulated_loss / accumulation_steps:.4f}, Tokens/s: {tokens_per_second:.2f}")
-            accumulated_loss = 0.0
+        # Calculate tokens/s
+        tokens_processed = ((step + 1) * total_tokens)
+        elapsed_time = time.time() - start_time
+        tokens_per_second = tokens_processed / elapsed_time
 
-        if step >= max_steps:
-            break
-
-    end_time = time.time()
-    epoch_duration = end_time - start_time
-    print(f"Epoch {epoch+1}/{epochs}, Duration: {epoch_duration:.2f} seconds")
+        print(f"Step {step + 1}, Loss: {accumulated_loss / accumulation_steps:.4f}, Tokens/s: {tokens_per_second:.2f}")
+        accumulated_loss = 0.0
 
 print("\nTraining completed. Final sample output:")
 print(sample(params, 10))
