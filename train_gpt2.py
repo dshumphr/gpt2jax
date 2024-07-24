@@ -261,7 +261,12 @@ for epoch in range(epochs):
             accumulated_grads = None
             step += 1
 
-            print(f"Step {step}, Loss: {accumulated_loss / accumulation_steps}")
+            # Calculate tokens/s
+            tokens_processed = (step * total_tokens)
+            elapsed_time = time.time() - start_time
+            tokens_per_second = tokens_processed / elapsed_time
+
+            print(f"Step {step}, Loss: {accumulated_loss / accumulation_steps:.4f}, Tokens/s: {tokens_per_second:.2f}")
             accumulated_loss = 0.0
 
         if step >= max_steps:
