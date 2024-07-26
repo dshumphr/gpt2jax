@@ -261,6 +261,7 @@ optimizer_state = optimizer.init(params)
 
 start_time = time.time()
 dataloader = DataLoaderLite(B, L, 'train')
+valloader = DataLoaderLite(B, L, 'val')
 with open("loss_history.txt", "w") as loss_file:
     for step in range(max_steps):
         batch, _ = dataloader.next_batch()
@@ -274,9 +275,20 @@ with open("loss_history.txt", "w") as loss_file:
             elapsed_time = time.time() - start_time
             tokens_per_second = tokens_processed / elapsed_time
 
-            print(f"Step {step + 1}, Loss: {accumulated_loss / accumulation_steps:.4f}, Tokens/s: {tokens_per_second:.2f}")
-            loss_file.write(f"Step {step + 1}, Loss: {accumulated_loss / accumulation_steps:.4f}, Tokens/s: {tokens_per_second:.2f}\n")
+            print(f"Step {step + 1}, Train Loss: {accumulated_loss / accumulation_steps:.4f}, Tokens/s: {tokens_per_second:.2f}")
+            loss_file.write(f"Step {step + 1}, Train Loss: {accumulated_loss / accumulation_steps:.4f}, Tokens/s: {tokens_per_second:.2f}\n")
             accumulated_loss = 0.0
+
+        if (step + 1) % 250 == 0:
+            val_loss = 0.0
+            for _ in range(accumulation_steps):
+                val_batch, _ = valloader.next_batch()
+                val_loss_step, _ = compute_loss_and_grads(params, val_batch)
+                val_loss += val_loss_step
+            val_loss /= accumulation_steps
+            print(f"Step {step + 1}, Validation Loss: {val_loss:.4f}")
+            loss_file.write(f"Step {step + 1}, Validation Loss: {val_loss:.4f}\n")
+            loss_file.flush()
 
 print("\nTraining completed. Final sample output:")
 print(sample(params, 10))
