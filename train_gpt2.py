@@ -241,20 +241,22 @@ optimizer_state = optimizer.init(params)
 
 start_time = time.time()
 batch_generator = get_batches(B, L)
-for step in range(max_steps):
-    batch = next(batch_generator)
-    loss, grads = compute_loss_and_grads(params, batch)
-    accumulated_loss += loss
-    params, optimizer_state = update_params(params, grads, optimizer_state)
+with open("loss_history.txt", "w") as loss_file:
+    for step in range(max_steps):
+        batch = next(batch_generator)
+        loss, grads = compute_loss_and_grads(params, batch)
+        accumulated_loss += loss
+        params, optimizer_state = update_params(params, grads, optimizer_state)
 
-    if (step + 1) % accumulation_steps == 0:
-        # Calculate tokens/s
-        tokens_processed = ((step + 1) * tokens_per_batch)
-        elapsed_time = time.time() - start_time
-        tokens_per_second = tokens_processed / elapsed_time
+        if (step + 1) % accumulation_steps == 0:
+            # Calculate tokens/s
+            tokens_processed = ((step + 1) * tokens_per_batch)
+            elapsed_time = time.time() - start_time
+            tokens_per_second = tokens_processed / elapsed_time
 
-        print(f"Step {step + 1}, Loss: {accumulated_loss / accumulation_steps:.4f}, Tokens/s: {tokens_per_second:.2f}")
-        accumulated_loss = 0.0
+            print(f"Step {step + 1}, Loss: {accumulated_loss / accumulation_steps:.4f}, Tokens/s: {tokens_per_second:.2f}")
+            loss_file.write(f"Step {step + 1}, Loss: {accumulated_loss / accumulation_steps:.4f}, Tokens/s: {tokens_per_second:.2f}\n")
+            accumulated_loss = 0.0
 
 print("\nTraining completed. Final sample output:")
 print(sample(params, 10))
