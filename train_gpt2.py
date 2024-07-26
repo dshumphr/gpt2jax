@@ -9,6 +9,7 @@ import os
 from model import Transformer
 import pickle
 import matplotlib.pyplot as plt
+from hellaswag import render_example, iterate_examples
 
 #jax.config.update("jax_debug_nans", True)
 def check_nan(tensor, name):
@@ -97,6 +98,8 @@ def visualize_loss(loss_file_path):
     train_losses = []
     val_steps = []
     val_losses = []
+    hellaswag_steps = []
+    hellaswag_accuracies = []
 
     with open(loss_file_path, 'r') as f:
         for line in f:
@@ -112,16 +115,32 @@ def visualize_loss(loss_file_path):
                 loss = float(parts[1].split(':')[1])
                 val_steps.append(step)
                 val_losses.append(loss)
+            elif 'Hellaswag Accuracy' in line:
+                parts = line.split(',')
+                step = int(parts[0].split()[1])
+                accuracy = float(parts[1].split(':')[1])
+                hellaswag_steps.append(step)
+                hellaswag_accuracies.append(accuracy)
 
-    plt.figure(figsize=(12, 6))
-    plt.plot(train_steps, train_losses, label='Train Loss')
-    plt.plot(val_steps, val_losses, label='Validation Loss')
-    plt.xlabel('Steps')
-    plt.ylabel('Loss')
-    plt.title('Training and Validation Loss')
-    plt.legend()
-    plt.grid(True)
-    plt.savefig('loss_plot.png')
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 12))
+    
+    ax1.plot(train_steps, train_losses, label='Train Loss')
+    ax1.plot(val_steps, val_losses, label='Validation Loss')
+    ax1.set_xlabel('Steps')
+    ax1.set_ylabel('Loss')
+    ax1.set_title('Training and Validation Loss')
+    ax1.legend()
+    ax1.grid(True)
+
+    ax2.plot(hellaswag_steps, hellaswag_accuracies, label='Hellaswag Accuracy')
+    ax2.set_xlabel('Steps')
+    ax2.set_ylabel('Accuracy')
+    ax2.set_title('Hellaswag Accuracy')
+    ax2.legend()
+    ax2.grid(True)
+
+    plt.tight_layout()
+    plt.savefig('training_metrics.png')
     plt.close()
 
 # Hparams
@@ -169,6 +188,30 @@ optimizer = optax.MultiSteps(
 )
 optimizer_state = optimizer.init(params)
 
+# Helper function for hellaswag evaluation
+@jax.jit
+def get_most_likely_row(tokens, mask, logits):
+    shift_logits = logits[..., :-1, :]
+    shift_tokens = tokens[..., 1:]
+    shift_losses = optax.softmax_cross_entropy_with_integer_labels(shift_logits, shift_tokens)
+    shift_mask = mask[..., 1:]
+    masked_shift_losses = shift_losses * shift_mask
+    sum_loss = jnp.sum(masked_shift_losses, axis=1)
+    avg_loss = sum_loss / jnp.sum(shift_mask, axis=1)
+    return jnp.argmin(avg_loss)
+
+# Hellaswag evaluation function
+def evaluate_hellaswag(params):
+    num_correct_norm = 0
+    num_total = 0
+    for example in iterate_examples("val"):
+        _, tokens, mask, label = render_example(example)
+        logits = Transformer.apply(params, jax.nn.one_hot(tokens, vocab_size))
+        pred_norm = get_most_likely_row(tokens, mask, logits)
+        num_total += 1
+        num_correct_norm += int(pred_norm == label)
+    return num_correct_norm / num_total
+
 start_time = time.time()
 dataloader = DataLoaderLite(B, L, 'train')
 valloader = DataLoaderLite(B, L, 'val')
@@ -198,6 +241,12 @@ with open("loss_history.txt", "w") as loss_file:
             val_loss /= accumulation_steps
             print(f"Step {step + 1}, Validation Loss: {val_loss:.4f}")
             loss_file.write(f"Step {step + 1}, Validation Loss: {val_loss:.4f}\n")
+            
+            # Run hellaswag evaluation
+            hellaswag_accuracy = evaluate_hellaswag(params)
+            print(f"Step {step + 1}, Hellaswag Accuracy: {hellaswag_accuracy:.4f}")
+            loss_file.write(f"Step {step + 1}, Hellaswag Accuracy: {hellaswag_accuracy:.4f}\n")
+            
             loss_file.flush()
 
 print("\nTraining completed. Final sample output:")
@@ -214,4 +263,4 @@ print("Final model saved.")
 
 # Visualize loss results
 visualize_loss("loss_history.txt")
-print("Loss plot saved as 'loss_plot.png'")
+print("Training metrics plot saved as 'training_metrics.png'")
