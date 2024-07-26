@@ -8,6 +8,7 @@ from flash_attention_jax import causal_flash_attention
 import os
 from model import Transformer
 import pickle
+import matplotlib.pyplot as plt
 
 #jax.config.update("jax_debug_nans", True)
 def check_nan(tensor, name):
@@ -90,6 +91,38 @@ class DataLoaderLite:
             self.tokens = load_tokens(self.shards[self.current_shard])
             self.current_position = 0
         return x, y
+
+def visualize_loss(loss_file_path):
+    train_steps = []
+    train_losses = []
+    val_steps = []
+    val_losses = []
+
+    with open(loss_file_path, 'r') as f:
+        for line in f:
+            if 'Train Loss' in line:
+                parts = line.split(',')
+                step = int(parts[0].split()[1])
+                loss = float(parts[1].split(':')[1])
+                train_steps.append(step)
+                train_losses.append(loss)
+            elif 'Validation Loss' in line:
+                parts = line.split(',')
+                step = int(parts[0].split()[1])
+                loss = float(parts[1].split(':')[1])
+                val_steps.append(step)
+                val_losses.append(loss)
+
+    plt.figure(figsize=(12, 6))
+    plt.plot(train_steps, train_losses, label='Train Loss')
+    plt.plot(val_steps, val_losses, label='Validation Loss')
+    plt.xlabel('Steps')
+    plt.ylabel('Loss')
+    plt.title('Training and Validation Loss')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('loss_plot.png')
+    plt.close()
 
 # Hparams
 heads = 12
@@ -178,3 +211,7 @@ final_checkpoint = {
 with open('final_model.pkl', 'wb') as f:
     pickle.dump(final_checkpoint, f)
 print("Final model saved.")
+
+# Visualize loss results
+visualize_loss("loss_history.txt")
+print("Loss plot saved as 'loss_plot.png'")
