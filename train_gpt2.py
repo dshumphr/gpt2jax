@@ -6,6 +6,7 @@ from typing import Dict, Any
 import time
 import math
 from flash_attention_jax import causal_flash_attention
+import os
 
 #jax.config.update("jax_debug_nans", True)
 def check_nan(tensor, name):
@@ -177,22 +178,41 @@ def sample(model, length):
         x = jnp.concatenate([x, jax.nn.one_hot(jnp.array([[tok]]), vocab_size)], axis=1)
     return enc.decode(jnp.argmax(x[0], axis=-1).tolist())
 
-def get_batches(B, L):
-    with open('input.txt', 'r') as f:
-        text = f.read()
-    
-    enc = tiktoken.get_encoding("gpt2")
-    data = jnp.array(enc.encode(text))
-    
-    n = len(data)
-    batch_size = B * L
-    n_batches = n // batch_size
-    
-    while True:
-        for i in range(n_batches):
-            batch = data[i*batch_size : (i+1)*batch_size]
-            batch = batch.reshape(B, L)
-            yield batch
+def load_tokens(filename):
+    npt = jnp.load(filename)
+    return npt
+
+class DataLoaderLite:
+    def __init__(self, B, T, split):
+        self.B = B
+        self.T = T
+        assert split in {'train', 'val'}
+
+        data_root = "edu_fineweb10B"
+        shards = os.listdir(data_root)
+        shards = [s for s in shards if split in s]
+        shards = sorted(shards)
+        shards = [os.path.join(data_root, s) for s in shards]
+        self.shards = shards
+        assert len(shards) > 0, f"no shards found for split {split}"
+        self.reset()
+
+    def reset(self):
+        self.current_shard = 0
+        self.tokens = load_tokens(self.shards[self.current_shard])
+        self.current_position = 0
+
+    def next_batch(self):
+        B, T = self.B, self.T
+        buf = self.tokens[self.current_position : self.current_position+B*T+1]
+        x = (buf[:-1]).reshape(B, T)
+        y = (buf[1:]).reshape(B, T)
+        self.current_position += B * T
+        if self.current_position + (B * T + 1) > len(self.tokens):
+            self.current_shard = (self.current_shard + 1) % len(self.shards)
+            self.tokens = load_tokens(self.shards[self.current_shard])
+            self.current_position = 0
+        return x, y
 
 # Hparams
 heads = 12
@@ -201,14 +221,14 @@ hidden_size = 768
 vocab_size = 50304
 B = 4
 L = 1024
-max_steps = 4096
+max_steps = 19073
 
 # Initialize model parameters
 key = jax.random.PRNGKey(0)
 params = Transformer.init(key, vocab_size, heads, hidden_size, layers, L)
 
 # Learning rate scheduler using optax
-warmup_steps = 10
+warmup_steps = 715
 max_lr = 18e-4
 min_lr = max_lr * 0.1
 schedule_fn = optax.warmup_cosine_decay_schedule(
@@ -240,10 +260,10 @@ optimizer = optax.MultiSteps(
 optimizer_state = optimizer.init(params)
 
 start_time = time.time()
-batch_generator = get_batches(B, L)
+dataloader = DataLoaderLite(B, L, 'train')
 with open("loss_history.txt", "w") as loss_file:
     for step in range(max_steps):
-        batch = next(batch_generator)
+        batch, _ = dataloader.next_batch()
         loss, grads = compute_loss_and_grads(params, batch)
         accumulated_loss += loss
         params, optimizer_state = update_params(params, grads, optimizer_state)
