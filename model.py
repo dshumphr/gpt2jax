@@ -72,9 +72,9 @@ class MHA:
 
         """
         #flash attn
-        q_bhlk = jnp.einsum('ble,ehk->bhlk', x_ble, params['wq_ehk']) + params['bq_hk'][None, :, :]
-        k_bhlk = jnp.einsum('ble,ehk->bhlk', x_ble, params['wk_ehk']) + params['bk_hk'][None, :, :]
-        v_bhlk = jnp.einsum('ble,ehk->bhlk', x_ble, params['wv_ehk']) + params['bv_hk'][None, :, :]
+        q_bhlk = jnp.einsum('ble,ehk->bhlk', x_ble, params['wq_ehk']) + params['bq_hk'][None, :, None, :]
+        k_bhlk = jnp.einsum('ble,ehk->bhlk', x_ble, params['wk_ehk']) + params['bk_hk'][None, :, None, :]
+        v_bhlk = jnp.einsum('ble,ehk->bhlk', x_ble, params['wv_ehk']) + params['bv_hk'][None, :, None, :]
         values = causal_flash_attention(q_bhlk, k_bhlk, v_bhlk)
         out_ble = jnp.einsum('bhlk,hke->ble', values, params['wo_hke']) + params['b_e']
         return out_ble
