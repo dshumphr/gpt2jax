@@ -148,7 +148,7 @@ heads = 12
 layers = 12
 hidden_size = 768
 vocab_size = 50304
-B = 4
+B = 16
 L = 1024
 max_steps = 19073
 
@@ -158,7 +158,7 @@ params = Transformer.init(key, vocab_size, heads, hidden_size, layers, L)
 
 # Learning rate scheduler using optax
 warmup_steps = 715
-max_lr = 18e-4
+max_lr = 6e-4
 min_lr = max_lr * 0.1
 schedule_fn = optax.warmup_cosine_decay_schedule(
     init_value=min_lr,
@@ -217,22 +217,22 @@ dataloader = DataLoaderLite(B, L, 'train')
 valloader = DataLoaderLite(B, L, 'val')
 with open("loss_history.txt", "w") as loss_file:
     for step in range(max_steps):
-        batch, _ = dataloader.next_batch()
-        loss, grads = compute_loss_and_grads(params, batch)
-        accumulated_loss += loss
-        params, optimizer_state = update_params(params, grads, optimizer_state)
+        for _ in range(accumulation_steps):
+            batch, _ = dataloader.next_batch()
+            loss, grads = compute_loss_and_grads(params, batch)
+            accumulated_loss += loss
+            params, optimizer_state = update_params(params, grads, optimizer_state)
 
-        if (step + 1) % accumulation_steps == 0:
-            # Calculate tokens/s
-            tokens_processed = ((step + 1) * tokens_per_batch)
-            elapsed_time = time.time() - start_time
-            tokens_per_second = tokens_processed / elapsed_time
+        # Calculate tokens/s
+        tokens_processed = ((step + 1) * tokens_per_batch * accumulation_steps)
+        elapsed_time = time.time() - start_time
+        tokens_per_second = tokens_processed / elapsed_time
 
-            print(f"Step {step + 1}, Train Loss: {accumulated_loss / accumulation_steps:.4f}, Tokens/s: {tokens_per_second:.2f}")
-            loss_file.write(f"Step {step + 1}, Train Loss: {accumulated_loss / accumulation_steps:.4f}, Tokens/s: {tokens_per_second:.2f}\n")
-            accumulated_loss = 0.0
+        print(f"Step {step + 1}, Train Loss: {accumulated_loss / accumulation_steps:.4f}, Tokens/s: {tokens_per_second:.2f}")
+        loss_file.write(f"Step {step + 1}, Train Loss: {accumulated_loss / accumulation_steps:.4f}, Tokens/s: {tokens_per_second:.2f}\n")
+        accumulated_loss = 0.0
 
-        if (step + 1) % 250 == 0:
+        if (step + 1) % 1000 == 0:
             val_loss = 0.0
             for _ in range(accumulation_steps):
                 val_batch, _ = valloader.next_batch()
