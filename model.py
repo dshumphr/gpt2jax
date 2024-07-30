@@ -49,11 +49,15 @@ class MHA:
             'wk_ehk': jax.random.normal(subkeys[1], (e, h, e//h)) * 0.02,
             'wv_ehk': jax.random.normal(subkeys[2], (e, h, e//h)) * 0.02,
             'wo_hke': jax.random.normal(subkeys[3], (h, e//h, e)) * 0.02 / jnp.sqrt(2 * layers),
-            'b_e': jnp.zeros(e)
+            'b_e': jnp.zeros(e),
+            'bq_hk': jnp.zeros((h, e//h)),
+            'bk_hk': jnp.zeros((h, e//h)),
+            'bv_hk': jnp.zeros((h, e//h))
         }
 
     @staticmethod
     def apply(params, x_ble):
+        """
         q_blhk = jnp.einsum('ble,ehk->blhk', x_ble, params['wq_ehk'])
         k_blhk = jnp.einsum('ble,ehk->blhk', x_ble, params['wk_ehk'])
         v_blhk = jnp.einsum('ble,ehk->blhk', x_ble, params['wv_ehk'])
@@ -68,12 +72,11 @@ class MHA:
 
         """
         #flash attn
-        q_bhlk = jnp.einsum('ble,ehk->bhlk', x_ble, params['wq_ehk'])
-        k_bhlk = jnp.einsum('ble,ehk->bhlk', x_ble, params['wk_ehk'])
-        v_bhlk = jnp.einsum('ble,ehk->bhlk', x_ble, params['wv_ehk'])
+        q_bhlk = jnp.einsum('ble,ehk->bhlk', x_ble, params['wq_ehk']) + params['bq_hk']
+        k_bhlk = jnp.einsum('ble,ehk->bhlk', x_ble, params['wk_ehk']) + params['bk_hk']
+        v_bhlk = jnp.einsum('ble,ehk->bhlk', x_ble, params['wv_ehk']) + params['bv_hk']
         values = causal_flash_attention(q_bhlk, k_bhlk, v_bhlk)
         out_ble = jnp.einsum('bhlk,hke->ble', values, params['wo_hke']) + params['b_e']
-        """
         return out_ble
 
 class Block:
