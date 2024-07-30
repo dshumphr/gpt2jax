@@ -1,2 +1,4 @@
 *__pycache__*
 inits.txt
+fineweb/.*
+hellaswag/.*
