@@ -18,10 +18,10 @@ def check_nan(tensor, name):
         print(tensor)
 
 @jax.jit
-def compute_loss_and_grads(params, batch):
+def compute_loss_and_grads(params, x, y):
     def loss_fn(params):
-        logits = Transformer.apply(params, jax.nn.one_hot(batch[:, :-1], vocab_size))
-        loss = optax.softmax_cross_entropy_with_integer_labels(logits, batch[:, 1:])
+        logits = Transformer.apply(params, jax.nn.one_hot(x, vocab_size))
+        loss = optax.softmax_cross_entropy_with_integer_labels(logits, y)
         return jnp.mean(loss)
     
     loss, grads = jax.value_and_grad(loss_fn)(params)
@@ -219,8 +219,8 @@ valloader = DataLoaderLite(B, L, 'val')
 with open("loss_history.txt", "w") as loss_file:
     for step in range(max_steps):
         for _ in range(accumulation_steps):
-            batch, _ = dataloader.next_batch()
-            loss, grads = compute_loss_and_grads(params, batch)
+            x, y = dataloader.next_batch()
+            loss, grads = compute_loss_and_grads(params, x, y)
             accumulated_loss += loss
             params, optimizer_state = update_params(params, grads, optimizer_state)
 

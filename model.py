@@ -58,9 +58,9 @@ class MHA:
     @staticmethod
     def apply(params, x_ble):
         """
-        q_blhk = jnp.einsum('ble,ehk->blhk', x_ble, params['wq_ehk'])
-        k_blhk = jnp.einsum('ble,ehk->blhk', x_ble, params['wk_ehk'])
-        v_blhk = jnp.einsum('ble,ehk->blhk', x_ble, params['wv_ehk'])
+        q_blhk = jnp.einsum('ble,ehk->blhk', x_ble, params['wq_ehk']) + params['bq_hk'][None, None, :, :]
+        k_blhk = jnp.einsum('ble,ehk->blhk', x_ble, params['wk_ehk']) + params['bk_hk'][None, None, :, :]
+        v_blhk = jnp.einsum('ble,ehk->blhk', x_ble, params['wv_ehk']) + params['bv_hk'][None, None, :, :]
         attn = jnp.einsum('blhk,bmhk->bhlm', q_blhk, k_blhk)
         b, l, h, k = q_blhk.shape
         attn = attn / jnp.sqrt(k)
