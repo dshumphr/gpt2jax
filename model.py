@@ -94,10 +94,10 @@ class Block:
     def apply(params, x_ble):
         ln1_out = LayerNorm.apply(params['ln1'], x_ble)
         attn_out = MHA.apply(params['attn'], ln1_out)
-        x_ble += attn_out
+        x_ble = x_ble + attn_out
         ln2_out = LayerNorm.apply(params['ln2'], x_ble)
         ffn_out = FFN.apply(params['ffn'], ln2_out)
-        x_ble += ffn_out
+        x_ble = x_ble + ffn_out
         return x_ble
 
 class LayerNorm:
