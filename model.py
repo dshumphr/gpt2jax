@@ -16,14 +16,14 @@ class Transformer:
         toke_ve = jax.random.normal(subkey, (v, e)) * 0.02
         
         key, subkey = jax.random.split(key)
-        pose_ve = jax.random.normal(subkey, (l, e)) * 0.02
+        pose_le = jax.random.normal(subkey, (l, e)) * 0.02
         
         blocks = [Block.init(key, h, e, n) for _ in range(n)]
         lf = LayerNorm.init(key, e)
         
         return {
             'toke_ve': toke_ve,
-            'pose_ve': pose_ve,
+            'pose_le': pose_le,
             'blocks': blocks,
             'lf': lf
         }
@@ -31,7 +31,7 @@ class Transformer:
     @staticmethod
     def apply(params, x_blv):
         tokemb_ble = jnp.einsum('blv,ve->ble', x_blv, params['toke_ve'])
-        posemb_ble = jnp.einsum('bl,le->ble', jnp.arange(x_blv.shape[1])[None,:], params['pose_ve'][:x_blv.shape[1]])
+        posemb_ble = jnp.einsum('bl,le->ble', jnp.arange(x_blv.shape[1])[None,:], params['pose_le'][:x_blv.shape[1]])
         emb_ble = tokemb_ble + posemb_ble
         o_ble = emb_ble
         for i, block_params in enumerate(params['blocks']):
