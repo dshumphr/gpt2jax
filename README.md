@@ -29,11 +29,7 @@ TODO
 
 ## Gaps between this and Karpathy implementation
 - Mixed precision (although jax already does matmuls with tf32 by default on gpu)
-- Flash attention (TODO, nan-ing atm)
-- LR schedule (TODO)
-- Weight Decay, Fused Adam (TODO)
-- Batch size scheduling
-- Reduced context window and batch size due to my own hardware limits
-- Gradient Accumulation (TODO)
+- Fused Adam
+- Reduced batch size due to my own hardware limits
 
 Note AI.md is added to enable a sonnet extension (https://github.com/dshumphr/tad)
