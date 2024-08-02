@@ -8,6 +8,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 from hellaswag import render_example, iterate_examples
 # -----------------------------------------------------------------------------
+# Pytorch impl used for comparison only
 
 class CausalSelfAttention(nn.Module):
 

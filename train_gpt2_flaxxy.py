@@ -8,7 +8,8 @@ from flash_attention_jax import causal_flash_attention
 from flax import linen as nn
 from flax.training import train_state
 
-# TODO fix up initializers to match regular version
+# Flax version for speed/correctness test
+# TODO fix up initializers, etc to match regular version
 
 def check_nan(tensor, name):
     if jnp.isnan(tensor).any():

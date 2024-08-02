@@ -58,20 +58,6 @@ def compare_init_distributions(jax_model, torch_model):
         print_init_info(info)
         torch_info[info['shape']].append(info)
     
-    print("\nComparison Summary:")
-    all_shapes = set(list(jax_info.keys()) + list(torch_info.keys()))
-    for shape in all_shapes:
-        print(f"Shape: {shape}")
-        if shape in jax_info and shape in torch_info:
-            jax_mean_std = np.mean([info['std'] for info in jax_info[shape]])
-            torch_mean_std = np.mean([info['std'] for info in torch_info[shape]])
-            print(f"  JAX mean std: {jax_mean_std:.6f}")
-            print(f"  PyTorch mean std: {torch_mean_std:.6f}")
-            print(f"  Relative difference: {abs(jax_mean_std - torch_mean_std) / max(jax_mean_std, torch_mean_std):.2%}")
-        else:
-            print("  Shape mismatch between JAX and PyTorch models")
-        print()
-
 # Usage
 heads = 12
 layers = 12

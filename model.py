@@ -29,9 +29,9 @@ class Transformer:
         }
 
     @staticmethod
-    def apply(params, x_blv):
-        tokemb_ble = jnp.einsum('blv,ve->ble', x_blv, params['toke_ve'])
-        posemb_ble = jnp.einsum('bl,le->ble', jnp.arange(x_blv.shape[1])[None,:], params['pose_le'][:x_blv.shape[1]])
+    def apply(params, x_bl):
+        tokemb_ble = jnp.take(params['toke_ve'], x_bl, axis=0)
+        posemb_ble = jnp.take(params['pose_le'], jnp.arange(x_bl.shape[1]), axis=0)
         emb_ble = tokemb_ble + posemb_ble
         o_ble = emb_ble
         for i, block_params in enumerate(params['blocks']):

@@ -20,7 +20,7 @@ def check_nan(tensor, name):
 @jax.jit
 def compute_loss_and_grads(params, x, y):
     def loss_fn(params):
-        logits = Transformer.apply(params, jax.nn.one_hot(x, vocab_size))
+        logits = Transformer.apply(params, x)
         loss = optax.softmax_cross_entropy_with_integer_labels(logits, y)
         return jnp.mean(loss)
     
@@ -39,10 +39,9 @@ def custom_choice(key, a, p):
     r = jax.random.uniform(key)
     return jnp.argmin(cum_probs < r)
 
-def sample(model, length):
+def sample(state, length):
     enc = tiktoken.get_encoding("gpt2")
     x = jnp.array([enc.encode("All:")])
-    x = jax.nn.one_hot(x, vocab_size)
     for i in range(length):
         logits = Transformer.apply(params, x)
         probs = jax.nn.softmax(logits[:, -1, :], axis=-1)
@@ -54,8 +53,8 @@ def sample(model, length):
             break
         tok = custom_choice(jax.random.PRNGKey(i), a=10, p=topk_probs)
         tok = topk[tok]
-        x = jnp.concatenate([x, jax.nn.one_hot(jnp.array([[tok]]), vocab_size)], axis=1)
-    return enc.decode(jnp.argmax(x[0], axis=-1).tolist())
+        x = jnp.concatenate([x, jnp.array([[tok]])], axis=1)
+    return enc.decode(x[0].tolist())
 
 def load_tokens(filename):
     npt = jnp.load(filename)
@@ -207,7 +206,7 @@ def evaluate_hellaswag(params):
     num_total = 0
     for example in iterate_examples("val"):
         _, tokens, mask, label = render_example(example)
-        logits = Transformer.apply(params, jax.nn.one_hot(tokens, vocab_size))
+        logits = Transformer.apply(params, tokens)
         pred_norm = get_most_likely_row(tokens, mask, logits)
         num_total += 1
         num_correct_norm += int(pred_norm == label)
@@ -236,8 +235,8 @@ with open("loss_history.txt", "w") as loss_file:
         if (step + 1) % 1000 == 0:
             val_loss = 0.0
             for _ in range(accumulation_steps):
-                val_batch, _ = valloader.next_batch()
-                val_loss_step, _ = compute_loss_and_grads(params, val_batch)
+                val_batch, val_targets = valloader.next_batch()
+                val_loss_step, _ = compute_loss_and_grads(params, val_batch, val_targets)
                 val_loss += val_loss_step
             val_loss /= accumulation_steps
             print(f"Step {step + 1}, Validation Loss: {val_loss:.4f}")
