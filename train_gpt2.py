@@ -123,10 +123,10 @@ def visualize_loss(loss_file_path):
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 12))
     
-    ax1.plot(train_steps, train_losses, label='Train Loss')
-    ax1.plot(val_steps, val_losses, label='Validation Loss')
+    ax1.semilogy(train_steps, train_losses, label='Train Loss')
+    ax1.semilogy(val_steps, val_losses, label='Validation Loss')
     ax1.set_xlabel('Steps')
-    ax1.set_ylabel('Loss')
+    ax1.set_ylabel('Loss (log scale)')
     ax1.set_title('Training and Validation Loss')
     ax1.legend()
     ax1.grid(True)
