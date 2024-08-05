@@ -245,7 +245,7 @@ with open("loss_history.txt", "w") as loss_file:
             loss_file.write(f"Step {step + 1}, Validation Loss: {val_loss:.4f}\n")
             
             # Run hellaswag evaluation
-            hellaswag_accuracy = evaluate_hellaswag(params)
+            hellaswag_accuracy = evaluate_hellaswag(params, use_rope=use_rope)
             print(f"Step {step + 1}, Hellaswag Accuracy: {hellaswag_accuracy:.4f}")
             loss_file.write(f"Step {step + 1}, Hellaswag Accuracy: {hellaswag_accuracy:.4f}\n")
             
