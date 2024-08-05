@@ -17,10 +17,12 @@ def check_nan(tensor, name):
         print(f"NaN detected in {name}")
         print(tensor)
 
+use_rope = True
+
 @jax.jit
 def compute_loss_and_grads(params, x, y):
     def loss_fn(params):
-        logits = Transformer.apply(params, x)
+        logits = Transformer.apply(params, x, use_rope)
         loss = optax.softmax_cross_entropy_with_integer_labels(logits, y)
         return jnp.mean(loss)
     
@@ -43,7 +45,7 @@ def sample(state, length):
     enc = tiktoken.get_encoding("gpt2")
     x = jnp.array([enc.encode("All:")])
     for i in range(length):
-        logits = Transformer.apply(params, x)
+        logits = Transformer.apply(params, x, use_rope)
         probs = jax.nn.softmax(logits[:, -1, :], axis=-1)
         topk = jnp.argsort(probs[0])[-10:]
         topk_probs = probs[0][topk]
@@ -153,7 +155,7 @@ max_steps = 19073
 
 # Initialize model parameters
 key = jax.random.PRNGKey(0)
-params = Transformer.init(key, vocab_size, heads, hidden_size, layers, L)
+params = Transformer.init(key, vocab_size, heads, hidden_size, layers, L, True, True)
 
 # Learning rate scheduler using optax
 warmup_steps = 715
@@ -178,7 +180,7 @@ accumulated_loss = 0.0
 
 # Initialize optimizer
 weight_decay = 0.1
-mask = jax.tree_map(lambda x: x.ndim >= 2, params)
+mask = jax.tree.map(lambda x: x.ndim >= 2, params)
 optimizer = optax.MultiSteps(
     optax.chain(
         optax.clip_by_global_norm(1.0),
@@ -201,12 +203,12 @@ def get_most_likely_row(tokens, mask, logits):
     return jnp.argmin(avg_loss)
 
 # Hellaswag evaluation function
-def evaluate_hellaswag(params):
+def evaluate_hellaswag(params, use_rope):
     num_correct_norm = 0
     num_total = 0
     for example in iterate_examples("val"):
         _, tokens, mask, label = render_example(example)
-        logits = Transformer.apply(params, tokens)
+        logits = Transformer.apply(params, tokens, use_rope)
         pred_norm = get_most_likely_row(tokens, mask, logits)
         num_total += 1
         num_correct_norm += int(pred_norm == label)

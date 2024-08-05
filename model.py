@@ -11,7 +11,7 @@ def check_nan(tensor, name):
 
 class Transformer:
     @staticmethod
-    def init(key, v, h, e, n, l, use_rmsnorm=False, use_swiglu=False, use_rope=False):
+    def init(key, v, h, e, n, l, use_rmsnorm=False, use_swiglu=False):
         key, subkey = jax.random.split(key)
         toke_ve = jax.random.normal(subkey, (v, e)) * 0.02
         
@@ -26,20 +26,19 @@ class Transformer:
             'pose_le': pose_le,
             'blocks': blocks,
             'lf': lf,
-            'use_rope': use_rope
         }
 
     @staticmethod
-    def apply(params, x_bl):
+    def apply(params, x_bl, use_rope=False):
         tokemb_ble = jnp.take(params['toke_ve'], x_bl, axis=0)
-        if not params['use_rope']:
+        if not use_rope:
             posemb_ble = jnp.take(params['pose_le'], jnp.arange(x_bl.shape[1]), axis=0)
             emb_ble = tokemb_ble + posemb_ble
         else:
             emb_ble = tokemb_ble
         o_ble = emb_ble
         for i, block_params in enumerate(params['blocks']):
-            o_ble = Block.apply(block_params, o_ble, params['use_rope'])
+            o_ble = Block.apply(block_params, o_ble, use_rope)
         o_ble = RMSNorm.apply(params['lf'], o_ble) if isinstance(params['lf'], dict) and 'gamma_e' in params['lf'] else LayerNorm.apply(params['lf'], o_ble)
         logits_blv = jnp.einsum('ble,ve->blv', o_ble, params['toke_ve'])
         return logits_blv
@@ -174,7 +173,7 @@ class FFN:
 class Swiglu:
     @staticmethod
     def init(key, e, layers):
-        key, *subkeys = jax.random.split(key, 3)
+        key, *subkeys = jax.random.split(key, 4)
         return {
             'w1': jax.random.normal(subkeys[0], (e, 4*e)) * 0.02,
             'w2': jax.random.normal(subkeys[1], (e, 4*e)) * 0.02,
