@@ -1,0 +1,6 @@
+datasets
+tqdm
+jax[cuda12]
+flash-attention-jax
+optax
+tiktoken
