@@ -21,15 +21,12 @@ The goal of this project is to reproduce the GPT-2 (124M) model using JAX, start
 
 ## Usage
 
-TODO
-
-## Training
-
-TODO
+python train_gpt2.py
 
 ## Gaps between this and Karpathy implementation
 - Mixed precision (although jax already does matmuls with tf32 by default on gpu)
 - Fused Adam
 - Reduced batch size due to my own hardware limits
+This implementation also offers RMSNorm, RoPe, and SwiGLU, optionally.
 
 Note AI.md is added to enable a sonnet extension (https://github.com/dshumphr/tad)
